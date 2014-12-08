@@ -8,7 +8,11 @@ package org.nube.builder.core;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.apache.commons.io.FileUtils;
 
 /**
  *
@@ -16,33 +20,53 @@ import java.util.List;
  */
 public class Nube {
 
-    private static final List<File> fileFound = new ArrayList();
+    private static List<File> fileFound = new ArrayList();
 
-    static void main(String[] args) {
-        findServices(new File("C:\\test"));
-        compileDir(fileFound.get(0));
-        generateJars(fileFound.get(0));
+    public static void main(String[] args) throws IOException {
+
+        File distro = new File("dist");
+        distro.mkdir();
+
+        //start by finding services
+        File output = findDirectory(new File("src\\"), "service");
+        System.out.println("Found " + output + "\n\n");
+
+        //process domains one by one
+        for (File file : output.listFiles()) {
+            System.out.println("****Processing " + file.getName() + " domain ****");
+            buildStaticContent(file.getName(), distro);
+            compileDir(file);
+            generateJars(file);
+            System.out.println("**** Done processing " + file.getName() + " domain ****\n\n");
+        }
+
     }
 
-    public static void findServices(File file) {
+    public static File findDirectory(File file, String directoryName) {
         File[] files = file.listFiles();
+
         if (null != files) {
             for (File input : files) {
-//                System.out.println("File is : " + input.getName());
-                if (!input.getName().equals("service")) {
-                    findServices(input);
-                } else if (input.getName().equalsIgnoreCase("service")) {
-//                    System.out.println("Do i ever get here : " + input.getName());
-                    fileFound.add(input);
+                if (!input.getName().equals(directoryName)) {
+                    return findDirectory(input, directoryName);
+
+                } else if (input.getName().equalsIgnoreCase(directoryName)) {
+                    System.out.println("Found files : " + input.getName());
+                    for (File tempFile : input.listFiles()) {
+                        System.out.println("child " + tempFile.toString());
+                    }
+                    //  fileFound.addAll(Arrays.asList(input.listFiles()));
+                    return input;
                 }
             }
         }
+        return null;
     }
 
     public static void compileDir(File file) {
         try {
-            String command = "javac " + file.listFiles()[0] + "\\*.java";
-            System.out.println("Running ::  " + command);
+            String command = "javac " + file + "\\*.java -classpath lib\\*";
+            System.out.println("Compiling ::  " + command);
             Runtime.getRuntime().exec(command);
             System.out.println("Compile successful");
         } catch (IOException ex) {
@@ -52,12 +76,38 @@ public class Nube {
 
     public static void generateJars(File file) {
         try {
-            String command = "jar cvf C:\\test\\" + file.getName() + ".jar " + file.listFiles()[0] + "\\*";
+            String command = "jar cvfe dist\\" + file.getName() + "\\" + file.getName() + ".jar Employee.class " + file + "\\*";
             System.out.println("Running ::  " + command);
             Runtime.getRuntime().exec(command);
             System.out.println("Jar Successful");
         } catch (IOException ex) {
             ex.printStackTrace();
+        }
+    }
+
+    public static void buildStaticContent(String fileName, File dist) {
+
+        //locate the static directory
+        File file = new File("static");
+
+        if (!file.exists()) {
+            System.out.println("No static directory found... nothing to do here");
+        } else {
+            System.out.println(">> Processing static files <<");
+            File staticDomain = findDirectory(file, fileName);
+
+            if (null != staticDomain) {
+                System.out.println("Process static for " + staticDomain);
+                try {
+                    File destDomain = new File(dist.getName() + "\\" + fileName);
+                    FileUtils.copyDirectory(staticDomain, destDomain);
+                } catch (IOException ex) {
+                    ex.printStackTrace();;
+                }
+            } else {
+                System.out.println("No static content for " + fileName + " domain");
+            }
+
         }
     }
 }
